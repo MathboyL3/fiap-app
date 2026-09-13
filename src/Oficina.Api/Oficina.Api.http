@@ -1,0 +1,429 @@
+### ============================================================
+### Tech Challenge — Fase 1 — Roteiro de demonstração (15 min)
+### Sistema Integrado de Atendimento e Execução de Serviços (Oficina)
+###
+### Como rodar:
+###   1) docker compose up -d postgres   (sobe Postgres em 5431)
+###   2) dotnet run --project src/Oficina.Api
+###
+### Requisitos:
+###   - Identificação do cliente por CPF/CNPJ
+###   - Cadastro de veículo (placa, marca, modelo, ano)
+###   - Inclusão de serviços e peças, orçamento automático
+###   - Fluxo de status (Recebida → Em diagnóstico → Aguardando
+###     aprovação → Em execução → Finalizada → Entregue)
+###   - Consulta pública via API (sem JWT)
+###   - CRUDs administrativos + listagens
+###   - Tempo médio de execução
+###   - Autenticação JWT + roles
+###   - Validação de CPF/CNPJ e placa
+### ============================================================
+
+@baseUrl = http://localhost:5111
+@contentType = application/json
+
+### ============================================================
+### §0. AUTENTICAÇÃO — Bootstrap do Gerente + Login
+### ============================================================
+
+### 0.1) Bootstrap do primeiro Gerente (rodar UMA vez por ambiente)
+###      Endpoint público que só funciona enquanto não há nenhum usuário.
+POST {{baseUrl}}/api/auth/bootstrap
+Content-Type: {{contentType}}
+
+{
+  "nome": "Admin Demo",
+  "email": "admin@oficina.local2",
+  "senha": "Admin@12345",
+  "role": "Gerente"
+}
+
+### 0.2) Login → captura o accessToken para os próximos requests
+# @name login
+POST {{baseUrl}}/api/auth/login
+Content-Type: {{contentType}}
+
+{
+  "email": "admin@oficina.local2",
+  "senha": "Admin@12345"
+}
+
+### 0.3) (Opcional) Criar um Mecânico — só Gerente pode
+POST {{baseUrl}}/api/auth/usuarios
+Content-Type: {{contentType}}
+Authorization: Bearer {{login.response.body.$.accessToken}}
+
+{
+  "nome": "Joao Mecanico",
+  "email": "mecanico@oficina.local",
+  "senha": "Mec@12345",
+  "role": "Mecanico"
+}
+
+
+### ============================================================
+### §1. CLIENTE PESSOA FÍSICA — CRUD com CPF
+### ============================================================
+
+### 1.1) Criar cliente PF (CPF válido: 111.444.777-35)
+# @name clientePF
+POST {{baseUrl}}/api/clientes
+Content-Type: {{contentType}}
+Authorization: Bearer {{login.response.body.$.accessToken}}
+
+{
+  "nome": "Maria Silva",
+  "documento": "08537040908",
+  "email": "maria.silva@email.com",
+  "telefone": "11987654321"
+}
+
+### 1.2) Buscar cliente por documento (fluxo de identificação no atendimento)
+GET {{baseUrl}}/api/clientes/por-documento/08537040908
+Authorization: Bearer {{login.response.body.$.accessToken}}
+
+### 1.3) Atualizar dados do cliente
+PATCH {{baseUrl}}/api/clientes/{{clientePF.response.body.$.id}}
+Content-Type: {{contentType}}
+Authorization: Bearer {{login.response.body.$.accessToken}}
+
+{
+  "telefone": "11999990000"
+}
+
+
+### ============================================================
+### §2. CLIENTE PESSOA JURÍDICA — CRUD com CNPJ
+### ============================================================
+
+### 2.1) Criar cliente PJ (CNPJ válido: 11.222.333/0001-81)
+# @name clientePJ
+POST {{baseUrl}}/api/clientes
+Content-Type: {{contentType}}
+Authorization: Bearer {{login.response.body.$.accessToken}}
+
+{
+  "nome": "Frota Express LTDA",
+  "documento": "11222333000181",
+  "email": "contato@frotaexpress.com.br",
+  "telefone": "1130001000"
+}
+
+
+### ============================================================
+### §3. VEÍCULO — Cadastro vinculado ao cliente
+### ============================================================
+
+### 3.1) Cadastrar veículo (placa, marca, modelo, ano)
+# @name veiculo
+POST {{baseUrl}}/api/veiculos
+Content-Type: {{contentType}}
+Authorization: Bearer {{login.response.body.$.accessToken}}
+
+{
+  "clienteId": "{{clientePF.response.body.$.id}}",
+  "placa": "ABC1E23",
+  "marca": "Volkswagen",
+  "modelo": "Gol",
+  "ano": 2020
+}
+
+### 3.2) Listar veículos do cliente
+GET {{baseUrl}}/api/veiculos/por-cliente/{{clientePF.response.body.$.id}}
+Authorization: Bearer {{login.response.body.$.accessToken}}
+
+
+### ============================================================
+### §4. SERVIÇO — Catálogo (CRUD restrito a Gerente)
+### ============================================================
+
+### 4.1) Cadastrar serviço — Troca de Óleo
+# @name servicoTrocaOleo
+POST {{baseUrl}}/api/servicos
+Content-Type: {{contentType}}
+Authorization: Bearer {{login.response.body.$.accessToken}}
+
+{
+  "nome": "Troca de óleo",
+  "descricao": "Troca de óleo do motor + filtro",
+  "valorBase": 120.00,
+  "tempoEstimadoMinutos": 45
+}
+
+### 4.2) Cadastrar serviço — Alinhamento
+# @name servicoAlinhamento
+POST {{baseUrl}}/api/servicos
+Content-Type: {{contentType}}
+Authorization: Bearer {{login.response.body.$.accessToken}}
+
+{
+  "nome": "Alinhamento",
+  "descricao": "Alinhamento e balanceamento das 4 rodas",
+  "valorBase": 150.00,
+  "tempoEstimadoMinutos": 60
+}
+
+### 4.3) Listar serviços ativos
+GET {{baseUrl}}/api/servicos
+Authorization: Bearer {{login.response.body.$.accessToken}}
+
+
+### ============================================================
+### §5. PEÇAS / INSUMOS — com controle de estoque
+### ============================================================
+
+### 5.1) Cadastrar peça — Filtro de óleo (estoque inicial = 50, mínimo = 10)
+# @name pecaFiltro
+POST {{baseUrl}}/api/pecas
+Content-Type: {{contentType}}
+Authorization: Bearer {{login.response.body.$.accessToken}}
+
+{
+  "nome": "Filtro de óleo Tecfil PSL93",
+  "codigo": "FO-PSL93",
+  "unidade": "UN",
+  "valor": 35.50,
+  "quantidadeInicial": 50,
+  "limiteMinimo": 10
+}
+
+### 5.2) Cadastrar peça — Óleo 5W30 (litro)
+# @name pecaOleo
+POST {{baseUrl}}/api/pecas
+Content-Type: {{contentType}}
+Authorization: Bearer {{login.response.body.$.accessToken}}
+
+{
+  "nome": "Óleo motor 5W30 sintético",
+  "codigo": "OL-5W30",
+  "unidade": "L",
+  "valor": 48.90,
+  "quantidadeInicial": 100,
+  "limiteMinimo": 20
+}
+
+### 5.3) Listar peças ativas (mostra estoque disponível e flag estoqueBaixo)
+GET {{baseUrl}}/api/pecas
+Authorization: Bearer {{login.response.body.$.accessToken}}
+
+### 5.4) Reabastecer estoque (entrada de NF)
+POST {{baseUrl}}/api/pecas/{{pecaFiltro.response.body.$.id}}/reabastecer
+Content-Type: {{contentType}}
+Authorization: Bearer {{login.response.body.$.accessToken}}
+
+{
+  "quantidade": 20,
+  "referencia": "NF-12345"
+}
+
+
+### ============================================================
+### §6. FLUXO PRINCIPAL — Ordem de Serviço (criação → entrega)
+### ============================================================
+
+### 6.1) Abrir OS → status inicial: Recebida
+# @name os
+POST {{baseUrl}}/api/ordens-servico
+Content-Type: {{contentType}}
+Authorization: Bearer {{login.response.body.$.accessToken}}
+
+{
+  "clienteId": "{{clientePF.response.body.$.id}}",
+  "veiculoId": "{{veiculo.response.body.$.id}}"
+}
+
+### 6.2) Incluir serviço — Troca de óleo (qty 1)
+POST {{baseUrl}}/api/ordens-servico/{{os.response.body.$.id}}/servicos
+Content-Type: {{contentType}}
+Authorization: Bearer {{login.response.body.$.accessToken}}
+
+{
+  "servicoId": "{{servicoTrocaOleo.response.body.$.id}}",
+  "quantidade": 1
+}
+
+### 6.3) Incluir serviço — Alinhamento (qty 1)
+POST {{baseUrl}}/api/ordens-servico/{{os.response.body.$.id}}/servicos
+Content-Type: {{contentType}}
+Authorization: Bearer {{login.response.body.$.accessToken}}
+
+{
+  "servicoId": "{{servicoAlinhamento.response.body.$.id}}",
+  "quantidade": 1
+}
+
+### 6.4) Incluir peça — Filtro de óleo (qty 1) — reserva estoque
+POST {{baseUrl}}/api/ordens-servico/{{os.response.body.$.id}}/pecas
+Content-Type: {{contentType}}
+Authorization: Bearer {{login.response.body.$.accessToken}}
+
+{
+  "pecaId": "{{pecaFiltro.response.body.$.id}}",
+  "quantidade": 1
+}
+
+### 6.5) Incluir peça — Óleo 5W30 (qty 4 litros) — reserva estoque
+POST {{baseUrl}}/api/ordens-servico/{{os.response.body.$.id}}/pecas
+Content-Type: {{contentType}}
+Authorization: Bearer {{login.response.body.$.accessToken}}
+
+{
+  "pecaId": "{{pecaOleo.response.body.$.id}}",
+  "quantidade": 4
+}
+
+### 6.6) Detalhar OS — orçamento gerado automaticamente (valorTotal)
+GET {{baseUrl}}/api/ordens-servico/{{os.response.body.$.id}}
+Authorization: Bearer {{login.response.body.$.accessToken}}
+
+### 6.7) Iniciar diagnóstico → status: Em diagnóstico (Mecânico/Gerente)
+POST {{baseUrl}}/api/ordens-servico/{{os.response.body.$.id}}/diagnostico
+Content-Type: {{contentType}}
+Authorization: Bearer {{login.response.body.$.accessToken}}
+
+{
+  "observacoes": "Veículo recebido com 45.000 km. Óleo escuro confirmando troca. Pneus dianteiros com desgaste irregular."
+}
+
+### 6.8) Enviar para aprovação → status: Aguardando aprovação
+POST {{baseUrl}}/api/ordens-servico/{{os.response.body.$.id}}/enviar-aprovacao
+Authorization: Bearer {{login.response.body.$.accessToken}}
+
+### 6.9) Cliente aprova orçamento → status: Em execução
+POST {{baseUrl}}/api/ordens-servico/{{os.response.body.$.id}}/aprovar
+Authorization: Bearer {{login.response.body.$.accessToken}}
+
+### 6.10) Mecânico finaliza serviço → status: Finalizada
+POST {{baseUrl}}/api/ordens-servico/{{os.response.body.$.id}}/finalizar
+Authorization: Bearer {{login.response.body.$.accessToken}}
+
+### 6.11) Atendente entrega o veículo → status: Entregue
+POST {{baseUrl}}/api/ordens-servico/{{os.response.body.$.id}}/entregar
+Authorization: Bearer {{login.response.body.$.accessToken}}
+
+### 6.12) Detalhar OS final — histórico completo de status
+GET {{baseUrl}}/api/ordens-servico/{{os.response.body.$.id}}
+Authorization: Bearer {{login.response.body.$.accessToken}}
+
+
+### ============================================================
+### §7. CONSULTA PÚBLICA — cliente acompanha pelo app (sem JWT)
+### ============================================================
+
+### 7.1) Status público da OS (endpoint AllowAnonymous)
+GET {{baseUrl}}/api/ordens-servico/publico/{{os.response.body.$.id}}/status
+
+
+### ============================================================
+### §8. LISTAGEM E DETALHAMENTO ADMINISTRATIVO
+### ============================================================
+
+### 8.1) Listar todas as OSs (paginação)
+GET {{baseUrl}}/api/ordens-servico?skip=0&take=20
+Authorization: Bearer {{login.response.body.$.accessToken}}
+
+### 8.2) Listar OSs filtrando por status
+GET {{baseUrl}}/api/ordens-servico?status=Entregue
+Authorization: Bearer {{login.response.body.$.accessToken}}
+
+### 8.3) Listar clientes
+GET {{baseUrl}}/api/clientes?skip=0&take=50
+Authorization: Bearer {{login.response.body.$.accessToken}}
+
+
+### ============================================================
+### §9. MÉTRICAS — Tempo médio de execução (Gerente)
+### ============================================================
+
+### 9.1) Tempo médio geral
+GET {{baseUrl}}/api/ordens-servico/metricas/tempo-medio
+Authorization: Bearer {{login.response.body.$.accessToken}}
+
+### 9.2) Tempo médio em janela específica
+GET {{baseUrl}}/api/ordens-servico/metricas/tempo-medio?de=2026-01-01&ate=2026-12-31
+Authorization: Bearer {{login.response.body.$.accessToken}}
+
+
+### ============================================================
+### §10. SEGURANÇA E VALIDAÇÃO — casos negativos
+### ============================================================
+
+### 10.1) Acesso sem JWT → 401 Unauthorized
+GET {{baseUrl}}/api/clientes
+
+### 10.2) CPF inválido → 400 Bad Request
+POST {{baseUrl}}/api/clientes
+Content-Type: {{contentType}}
+Authorization: Bearer {{login.response.body.$.accessToken}}
+
+{
+  "nome": "Cliente Inválido",
+  "documento": "12345678900",
+  "email": "x@x.com",
+  "telefone": "11999990000"
+}
+
+### 10.3) Placa inválida → 400 Bad Request
+POST {{baseUrl}}/api/veiculos
+Content-Type: {{contentType}}
+Authorization: Bearer {{login.response.body.$.accessToken}}
+
+{
+  "clienteId": "{{clientePF.response.body.$.id}}",
+  "placa": "XXXX",
+  "marca": "Fiat",
+  "modelo": "Uno",
+  "ano": 2010
+}
+
+### 10.4) Login com credenciais inválidas → 401
+POST {{baseUrl}}/api/auth/login
+Content-Type: {{contentType}}
+
+{
+  "email": "admin@oficina.local",
+  "senha": "senhaerrada"
+}
+
+
+### ============================================================
+### §11. FASE 2 — Novos endpoints (Kubernetes/DevOps)
+### Ao rodar no cluster, use a base do port-forward:
+###   kubectl port-forward -n oficina svc/oficina-api 8080:80
+### e troque @baseUrl para http://localhost:8080
+### ============================================================
+
+### 11.1) Health — liveness (probe do K8s, sem auth)
+GET {{baseUrl}}/health/live
+
+### 11.2) Health — readiness (checa Postgres, sem auth)
+GET {{baseUrl}}/health/ready
+
+### 11.3) Painel de OS ativas (ordenação Fase 2)
+###      Em execução > Aguardando aprovação > Em diagnóstico > Recebida;
+###      mais antigas primeiro; exclui Finalizadas/Entregues/Canceladas.
+GET {{baseUrl}}/api/ordens-servico/painel?skip=0&take=20
+Authorization: Bearer {{login.response.body.$.accessToken}}
+
+### 11.4) Webhook de aprovação de orçamento (sistema externo, sem JWT)
+###      Protegido pelo header X-Webhook-Secret (config Webhook:Secret / Secret do K8s).
+###      aprovado=true  → aprova (Aguardando aprovação → Em execução)
+###      aprovado=false → rejeita (estorna reservas, OS → Cancelada)
+POST {{baseUrl}}/api/ordens-servico/webhook/aprovacao
+Content-Type: {{contentType}}
+X-Webhook-Secret: CHANGE_ME_webhook_secret_dev_only
+
+{
+  "ordemServicoId": "{{os.response.body.$.id}}",
+  "aprovado": true,
+  "motivo": null
+}
+
+### 11.5) Webhook sem o segredo → 401 Unauthorized
+POST {{baseUrl}}/api/ordens-servico/webhook/aprovacao
+Content-Type: {{contentType}}
+
+{
+  "ordemServicoId": "{{os.response.body.$.id}}",
+  "aprovado": true
+}

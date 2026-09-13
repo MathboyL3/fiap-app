@@ -1,0 +1,13 @@
+# .NET
+bin/
+obj/
+artifacts/
+coverage-report/
+*.user
+.vs/
+
+# Env
+.env
+
+# Secrets
+appsettings.*.local.json

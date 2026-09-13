@@ -1,0 +1,71 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: oficina-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: oficina
+      POSTGRES_USER: oficina
+      POSTGRES_PASSWORD: oficina_dev_only
+    ports:
+      - "5431:5432"   # Host:Container — exposto em 5431 (Postgres local Windows ocupa 5432 e 5433)
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U oficina -d oficina"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks:
+      - oficina-net
+
+  postgres-tests:
+    image: postgres:16-alpine
+    container_name: oficina-postgres-tests
+    profiles: ["tests"]   # Sobe só com: docker compose --profile tests up -d postgres-tests
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: oficina_tests
+      POSTGRES_USER: oficina
+      POSTGRES_PASSWORD: oficina_dev_only
+    ports:
+      - "5430:5432"   # Host:Container — exposto em 5430 (separado do dev em 5431)
+    tmpfs:
+      - /var/lib/postgresql/data   # Dados em memória — descarta a cada restart, ideal pra testes
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U oficina -d oficina_tests"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks:
+      - oficina-net
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: oficina-api
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ConnectionStrings__Postgres: "Host=postgres;Port=5432;Database=oficina;Username=oficina;Password=oficina_dev_only"
+      Jwt__Secret: "${JWT_SECRET:-CHANGE_ME_use_at_least_32_characters_secret_2026}"
+      Jwt__Issuer: "Oficina.Api"
+      Jwt__Audience: "Oficina.Api"
+      Jwt__ExpirationMinutes: "60"
+      Webhook__Secret: "${WEBHOOK_SECRET:-CHANGE_ME_webhook_secret_dev_only}"
+    ports:
+      - "5111:8080"   # Host:Container — API exposta em 5111
+    networks:
+      - oficina-net
+
+networks:
+  oficina-net:
+    driver: bridge
+
+volumes:
+  postgres_data:
+    driver: local

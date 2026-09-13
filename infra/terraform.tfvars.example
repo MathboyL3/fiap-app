@@ -1,0 +1,11 @@
+# Copie para terraform.tfvars e ajuste. NUNCA commite o terraform.tfvars real (contém segredos).
+kube_context      = "docker-desktop"
+namespace         = "oficina"
+api_image         = "oficina-api:local"
+api_replicas      = 2
+node_port         = 30080
+
+# Segredos — gere valores fortes para qualquer ambiente que não seja dev local.
+jwt_secret        = "CHANGE_ME_use_at_least_32_characters_secret_2026"
+webhook_secret    = "CHANGE_ME_webhook_secret_dev_only"
+postgres_password = "oficina_dev_only"

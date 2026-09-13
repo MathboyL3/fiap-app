@@ -1,0 +1,14 @@
+**/bin
+**/obj
+**/.vs
+**/.vscode
+**/.idea
+**/*.user
+**/*.suo
+**/coverage
+**/TestResults
+*.md
+Dockerfile
+.dockerignore
+docker-compose*.yml
+AGENTS.md

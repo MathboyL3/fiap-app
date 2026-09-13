@@ -1,0 +1,20 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: oficina-config
+  namespace: oficina
+  labels:
+    app.kubernetes.io/part-of: oficina
+data:
+  # Configuração não-sensível da API (variáveis com "__" mapeiam seções do appsettings).
+  ASPNETCORE_ENVIRONMENT: "Production"
+  ASPNETCORE_URLS: "http://+:8080"
+  Jwt__Issuer: "Oficina.Api"
+  Jwt__Audience: "Oficina.Api"
+  Jwt__ExpirationMinutes: "60"
+  # Connection string aponta para o Service do Postgres (postgres.oficina.svc.cluster.local:5432).
+  # A senha vem do Secret (Postgres__Password) e é composta pela env POSTGRES no Deployment.
+  Postgres__Host: "postgres"
+  Postgres__Port: "5432"
+  Postgres__Database: "oficina"
+  Postgres__Username: "oficina"

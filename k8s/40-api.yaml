@@ -1,0 +1,94 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: oficina-api
+  namespace: oficina
+  labels:
+    app.kubernetes.io/name: oficina-api
+    app.kubernetes.io/part-of: oficina
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: oficina-api
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: oficina-api
+        app.kubernetes.io/part-of: oficina
+    spec:
+      containers:
+        - name: oficina-api
+          image: oficina-api:local
+          # Imagem buildada no mesmo daemon do Docker Desktop; não puxar de registry remoto.
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8080
+          envFrom:
+            - configMapRef:
+                name: oficina-config
+          env:
+            - name: Jwt__Secret
+              valueFrom:
+                secretKeyRef:
+                  name: oficina-secrets
+                  key: Jwt__Secret
+            - name: Webhook__Secret
+              valueFrom:
+                secretKeyRef:
+                  name: oficina-secrets
+                  key: Webhook__Secret
+            - name: Postgres__Password
+              valueFrom:
+                secretKeyRef:
+                  name: oficina-secrets
+                  key: Postgres__Password
+            # Connection string final consumida pela API (ConnectionStrings:Postgres).
+            - name: ConnectionStrings__Postgres
+              value: "Host=postgres;Port=5432;Database=oficina;Username=oficina;Password=$(Postgres__Password)"
+          # Probes usam os endpoints de health adicionados na Fase 2.
+          startupProbe:
+            httpGet:
+              path: /health/live
+              port: http
+            failureThreshold: 30
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /health/live
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          # requests de CPU são obrigatórios para o HPA calcular utilização.
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: oficina-api
+  namespace: oficina
+  labels:
+    app.kubernetes.io/name: oficina-api
+    app.kubernetes.io/part-of: oficina
+spec:
+  type: NodePort
+  selector:
+    app.kubernetes.io/name: oficina-api
+  ports:
+    - name: http
+      port: 80
+      targetPort: 8080
+      nodePort: 30080   # Acesso local via http://localhost:30080
