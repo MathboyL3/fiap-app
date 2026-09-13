@@ -1,0 +1,137 @@
+{
+  "name": "FIAP Fase 3 - Oficina (Observabilidade)",
+  "description": "Latencia, erros, throughput, CPU/mem K8s, healthchecks e metricas de negocio (OS).",
+  "permissions": "PUBLIC_READ_WRITE",
+  "pages": [
+    {
+      "name": "Aplicacao (APM)",
+      "description": "Golden signals da API fiap-app.",
+      "widgets": [
+        {
+          "title": "Latencia media (ms) — geral",
+          "visualization": { "id": "viz.line" },
+          "layout": { "column": 1, "row": 1, "width": 6, "height": 3 },
+          "rawConfiguration": {
+            "nrqlQueries": [{ "accountId": 8507486, "query": "SELECT average(duration)*1000 AS 'latencia media (ms)' FROM Transaction WHERE appName='fiap-app' TIMESERIES AUTO" }]
+          }
+        },
+        {
+          "title": "Latencia P95/P99 (ms)",
+          "visualization": { "id": "viz.line" },
+          "layout": { "column": 7, "row": 1, "width": 6, "height": 3 },
+          "rawConfiguration": {
+            "nrqlQueries": [{ "accountId": 8507486, "query": "SELECT percentile(duration*1000, 95) AS p95, percentile(duration*1000, 99) AS p99 FROM Transaction WHERE appName='fiap-app' TIMESERIES AUTO" }]
+          }
+        },
+        {
+          "title": "Throughput (req/min)",
+          "visualization": { "id": "viz.line" },
+          "layout": { "column": 1, "row": 4, "width": 6, "height": 3 },
+          "rawConfiguration": {
+            "nrqlQueries": [{ "accountId": 8507486, "query": "SELECT rate(count(*), 1 minute) AS 'req/min' FROM Transaction WHERE appName='fiap-app' TIMESERIES AUTO" }]
+          }
+        },
+        {
+          "title": "Taxa de erro (%)",
+          "visualization": { "id": "viz.line" },
+          "layout": { "column": 7, "row": 4, "width": 6, "height": 3 },
+          "rawConfiguration": {
+            "nrqlQueries": [{ "accountId": 8507486, "query": "SELECT percentage(count(*), WHERE error IS true) AS 'erro %' FROM Transaction WHERE appName='fiap-app' TIMESERIES AUTO" }]
+          }
+        },
+        {
+          "title": "Top transacoes por latencia",
+          "visualization": { "id": "viz.bar" },
+          "layout": { "column": 1, "row": 7, "width": 6, "height": 3 },
+          "rawConfiguration": {
+            "nrqlQueries": [{ "accountId": 8507486, "query": "SELECT average(duration)*1000 AS 'ms' FROM Transaction WHERE appName='fiap-app' FACET name LIMIT 10" }]
+          }
+        },
+        {
+          "title": "Erros por transacao",
+          "visualization": { "id": "viz.table" },
+          "layout": { "column": 7, "row": 7, "width": 6, "height": 3 },
+          "rawConfiguration": {
+            "nrqlQueries": [{ "accountId": 8507486, "query": "SELECT count(*) FROM TransactionError WHERE appName='fiap-app' FACET error.message, transactionName LIMIT 20" }]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Kubernetes (Infra)",
+      "description": "CPU/memoria dos pods, replicas e saude.",
+      "widgets": [
+        {
+          "title": "CPU dos pods fiap-app (cores)",
+          "visualization": { "id": "viz.line" },
+          "layout": { "column": 1, "row": 1, "width": 6, "height": 3 },
+          "rawConfiguration": {
+            "nrqlQueries": [{ "accountId": 8507486, "query": "SELECT average(cpuUsedCores) FROM K8sContainerSample WHERE containerName='fiap-app' TIMESERIES AUTO" }]
+          }
+        },
+        {
+          "title": "Memoria dos pods fiap-app (bytes)",
+          "visualization": { "id": "viz.line" },
+          "layout": { "column": 7, "row": 1, "width": 6, "height": 3 },
+          "rawConfiguration": {
+            "nrqlQueries": [{ "accountId": 8507486, "query": "SELECT average(memoryUsedBytes) FROM K8sContainerSample WHERE containerName='fiap-app' TIMESERIES AUTO" }]
+          }
+        },
+        {
+          "title": "Replicas (HPA) ao longo do tempo",
+          "visualization": { "id": "viz.line" },
+          "layout": { "column": 1, "row": 4, "width": 6, "height": 3 },
+          "rawConfiguration": {
+            "nrqlQueries": [{ "accountId": 8507486, "query": "SELECT uniqueCount(podName) AS 'pods' FROM K8sPodSample WHERE deploymentName='fiap-app' TIMESERIES AUTO" }]
+          }
+        },
+        {
+          "title": "Pods por status",
+          "visualization": { "id": "viz.pie" },
+          "layout": { "column": 7, "row": 4, "width": 6, "height": 3 },
+          "rawConfiguration": {
+            "nrqlQueries": [{ "accountId": 8507486, "query": "SELECT uniqueCount(podName) FROM K8sPodSample WHERE namespace='oficina' FACET status" }]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Negocio (Ordens de Servico)",
+      "description": "Metricas de negocio derivadas das transacoes e logs.",
+      "widgets": [
+        {
+          "title": "Volume de OS criadas por dia",
+          "visualization": { "id": "viz.line" },
+          "layout": { "column": 1, "row": 1, "width": 6, "height": 3 },
+          "rawConfiguration": {
+            "nrqlQueries": [{ "accountId": 8507486, "query": "SELECT count(*) AS 'OS criadas' FROM Transaction WHERE appName='fiap-app' AND request.method='POST' AND name LIKE '%OrdensServico%' AND request.method='POST' TIMESERIES 1 day SINCE 7 days ago" }]
+          }
+        },
+        {
+          "title": "Latencia media por endpoint de OS (proxy de tempo por etapa)",
+          "visualization": { "id": "viz.bar" },
+          "layout": { "column": 7, "row": 1, "width": 6, "height": 3 },
+          "rawConfiguration": {
+            "nrqlQueries": [{ "accountId": 8507486, "query": "SELECT average(duration)*1000 AS 'ms' FROM Transaction WHERE appName='fiap-app' AND name LIKE '%OrdensServico%' FACET name LIMIT 15" }]
+          }
+        },
+        {
+          "title": "Erros de integracao (5xx / excecoes)",
+          "visualization": { "id": "viz.line" },
+          "layout": { "column": 1, "row": 4, "width": 6, "height": 3 },
+          "rawConfiguration": {
+            "nrqlQueries": [{ "accountId": 8507486, "query": "SELECT count(*) AS 'erros' FROM TransactionError WHERE appName='fiap-app' TIMESERIES AUTO" }]
+          }
+        },
+        {
+          "title": "Autenticacoes de cliente (Lambda) via logs",
+          "visualization": { "id": "viz.line" },
+          "layout": { "column": 7, "row": 4, "width": 6, "height": 3 },
+          "rawConfiguration": {
+            "nrqlQueries": [{ "accountId": 8507486, "query": "SELECT count(*) FROM Log WHERE service='fiap-auth-lambda' OR message LIKE '%Token emitido%' TIMESERIES AUTO" }]
+          }
+        }
+      ]
+    }
+  ]
+}
