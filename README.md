@@ -82,5 +82,23 @@ dotnet test Oficina.slnx -c Release      # 102 testes (domínio + aplicação + 
 - **PR/push:** restore, build, **test + coverage**, e **docker build** da imagem.
 - O deploy no cluster é responsabilidade do `fiap-infra-k8s` (Docker Desktop local). Para nuvem: push da imagem para um registry (GHCR/ECR) e rollout via credenciais.
 
+## O sistema completo (4 repositórios)
+
+Este repositório é a **aplicação**. A solução da Fase 3 é composta por 4 repos independentes:
+
+| Repositório | Papel |
+|---|---|
+| **[fiap-auth-lambda](https://github.com/MathboyL3/fiap-auth-lambda)** | Autenticação por CPF → JWT (API Gateway + Lambda / LocalStack) |
+| **[fiap-app](https://github.com/MathboyL3/fiap-app)** (este) | API principal da oficina (.NET / Kubernetes) |
+| **[fiap-infra-k8s](https://github.com/MathboyL3/fiap-infra-k8s)** | Infra do cluster (Terraform: deployment, HPA, Ingress, secrets) |
+| **[fiap-infra-db](https://github.com/MathboyL3/fiap-infra-db)** | Banco de dados gerenciado (Terraform + PostgreSQL no Railway) |
+
+> **Visão de arquitetura, diagrama de componentes (cloud) e diagramas de sequência
+> (autenticação CPF→JWT e abertura de OS):** [`docs/ARQUITETURA.md`](docs/ARQUITETURA.md).
+> **RFCs** (decisões do sistema): [`docs/rfc/`](docs/rfc/).
+
 ## Documentação
+- [`docs/ARQUITETURA.md`](docs/ARQUITETURA.md) — arquitetura, diagrama de componentes e sequência.
+- [`docs/rfc/`](docs/rfc/) — RFCs (decisões de arquitetura do sistema).
+- [`docs/ENTREGA.md`](docs/ENTREGA.md) — guia de entrega (links dos 4 repos, requisitos atendidos, pendências manuais).
 - [`docs/adr/0001-observabilidade-newrelic.md`](docs/adr/0001-observabilidade-newrelic.md)
