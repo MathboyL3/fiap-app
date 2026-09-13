@@ -9,6 +9,9 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi;
+using Serilog;
+using Serilog.Context;
+using System.Diagnostics;
 using Oficina.Api.Middleware;
 using Oficina.Application;
 using Oficina.Infrastructure;
@@ -16,6 +19,14 @@ using Oficina.Infrastructure.Auth;
 using Oficina.Infrastructure.Persistence;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// Logging estruturado JSON (New Relic / observabilidade).
+// Emite uma linha JSON por evento, com TraceId/SpanId para correlacao com o APM.
+builder.Host.UseSerilog((ctx, cfg) => cfg
+    .ReadFrom.Configuration(ctx.Configuration)
+    .Enrich.FromLogContext()
+    .Enrich.WithProperty("service.name", "fiap-app")
+    .WriteTo.Console(new Serilog.Formatting.Compact.CompactJsonFormatter()));
 
 // swaagger
 builder.Services.AddControllers();
@@ -112,6 +123,20 @@ if (!app.Environment.IsEnvironment("Testing"))
         ctx.Database.Migrate();
 }
 
+
+// Correlacao: injeta trace.id/span.id (padrao New Relic) no contexto de log.
+app.Use(async (context, next) =>
+{
+    var activity = Activity.Current;
+    using (LogContext.PushProperty("trace.id", activity?.TraceId.ToString()))
+    using (LogContext.PushProperty("span.id", activity?.SpanId.ToString()))
+    {
+        await next();
+    }
+});
+
+// Log de requests HTTP (metodo, rota, status, latencia) em JSON.
+app.UseSerilogRequestLogging();
 
 // Tratamento global de erros (mapeia DomainException/AppException para HTTP)
 app.UseMiddleware<ErrorHandlingMiddleware>();
