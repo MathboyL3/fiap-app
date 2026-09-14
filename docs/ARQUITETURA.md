@@ -69,6 +69,49 @@ segredo — é o que torna a autenticação emitida na Lambda válida na API .NE
 
 ---
 
+## 1b. Deploy em nuvem real (Railway)
+
+Além da nuvem AWS **simulada** (LocalStack) e do Kubernetes **local**, o sistema também roda
+**em nuvem real** no **Railway** — no mesmo projeto `fiap-fase3` do banco. É o deploy de
+"produção", com URLs públicas e deploy automático a partir dos repositórios no GitHub.
+
+```mermaid
+flowchart TB
+  Cliente([Cliente / Operador])
+
+  subgraph RW["Railway — projeto fiap-fase3 (nuvem real)"]
+    AUTH["fiap-auth (Bun)
+POST /auth  •  URL pública"]
+    APP["fiap-app (.NET, container)
+API + Swagger  •  URL pública"]
+    PG[("PostgreSQL 18
+gerenciado")]
+    APP -->|"Npgsql (rede privada
+postgres.railway.internal)"| PG
+    AUTH -->|"pg (TCP proxy + SSL)"| PG
+  end
+
+  Cliente -->|"1. POST /auth {cpf}"| AUTH
+  AUTH -->|"JWT HS256"| Cliente
+  Cliente -->|"2. API + Bearer JWT"| APP
+```
+
+| Serviço | Tipo no Railway | URL pública |
+|---|---|---|
+| **fiap-app** (.NET) | container (Dockerfile, autodeploy do repo) | `https://fiap-app-production.up.railway.app` |
+| **fiap-auth** (Node/Bun) | container `Bun.serve` (autodeploy do repo) | `https://fiap-auth-production.up.railway.app` |
+| **Postgres** | banco gerenciado | rede privada `postgres.railway.internal` + TCP proxy |
+
+**Notas de implantação**
+- A **app .NET** conecta ao Postgres pela **rede privada** interna do Railway; a **auth (Bun)** usa
+  o **TCP proxy público com SSL** (o driver `pg` do Node não resolve a rede privada IPv6-only).
+- Cada serviço fixa `PORT` alinhado ao *target port* do domínio público do Railway.
+- O contrato do **JWT é o mesmo** em qualquer topologia (HS256, `iss/aud=Oficina.Api`, mesmo
+  segredo), então a auth de um ambiente é aceita pela API do mesmo ambiente.
+
+> **Três topologias, mesmo código e mesmo contrato:** nuvem AWS simulada (LocalStack) · Kubernetes
+> local escalável (HPA) · **nuvem real (Railway)**. A escolha é só de infraestrutura.
+
 ## 2. Diagrama de sequência — Autenticação (CPF → JWT)
 
 ```mermaid
