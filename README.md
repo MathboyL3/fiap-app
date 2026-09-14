@@ -78,6 +78,22 @@ kubectl port-forward -n oficina svc/fiap-app 8080:80
 dotnet test Oficina.slnx -c Release      # 102 testes (domínio + aplicação + API)
 ```
 
+## Deploy em nuvem (Railway)
+
+Além do Kubernetes local, a API roda **em nuvem real** no **Railway** (mesmo projeto `fiap-fase3`
+do banco), como **container** construído a partir deste repositório (autodeploy a cada push na `main`).
+
+- **URL pública:** https://fiap-app-production.up.railway.app (Swagger na raiz).
+- **Banco:** conecta ao Postgres gerenciado pela **rede privada** do Railway
+  (`postgres.railway.internal:5432`), sem passar pela internet.
+- **Variáveis** (Railway → serviço `fiap-app`): `ConnectionStrings__Postgres` (com referência
+  `${{Postgres.PGPASSWORD}}`), `Jwt__Secret` (segredo HS256 canônico), `ASPNETCORE_ENVIRONMENT=Production`.
+- **Health:** `/health/live` e `/health/ready` (este confirma a conexão com o Postgres).
+
+> **Arquitetura dual:** o **Railway** é o deploy de **nuvem** (produção); o **Kubernetes**
+> (`fiap-infra-k8s`, Docker Desktop) permanece como o **cluster escalável com HPA** exigido pelo
+> enunciado. As duas formas usam a mesma imagem/o mesmo banco.
+
 ## CI/CD (`.github/workflows/ci.yml`)
 - **PR/push:** restore, build, **test + coverage**, e **docker build** da imagem.
 - O deploy no cluster é responsabilidade do `fiap-infra-k8s` (Docker Desktop local). Para nuvem: push da imagem para um registry (GHCR/ECR) e rollout via credenciais.
