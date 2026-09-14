@@ -43,11 +43,3 @@ Documento de fechamento: onde está cada requisito do enunciado e o que ainda de
 3. **Montar o PDF final** com os links dos 4 repositórios e o link do vídeo.
 4. Garantir que os **secrets de CI** estejam configurados em cada repo (já feito nesta sessão):
    `RAILWAY_TOKEN` (fiap-infra-db), `JWT_SECRET` + `DATABASE_URL` (fiap-auth-lambda).
-
-## Roteiro sugerido para o vídeo
-1. Mostrar os 4 repos e o ruleset `protect-main` (PR obrigatório).
-2. `POST /auth` com CPF válido no API Gateway (LocalStack) → recebe JWT.
-3. Chamar a API .NET no K8s com o JWT → abrir uma OS e conduzir o ciclo.
-4. Mostrar o HPA escalando (`kubectl get hpa -n oficina -w`) sob carga.
-5. Abrir os dashboards do New Relic (Aplicação / Kubernetes / Negócio) e uma condição de alerta.
-6. Fechar com a visão de arquitetura (`docs/ARQUITETURA.md`).
