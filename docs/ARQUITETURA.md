@@ -69,48 +69,54 @@ segredo — é o que torna a autenticação emitida na Lambda válida na API .NE
 
 ---
 
-## 1b. Deploy em nuvem real (Railway)
+## 1b. Topologia de implantação (Railway + Kubernetes + Kong)
 
-Além da nuvem AWS **simulada** (LocalStack) e do Kubernetes **local**, o sistema também roda
-**em nuvem real** no **Railway** — no mesmo projeto `fiap-fase3` do banco. É o deploy de
-"produção", com URLs públicas e deploy automático a partir dos repositórios no GitHub.
+O sistema combina **nuvem gerenciada (Railway)** com um **cluster Kubernetes local** que tem o
+**Kong** como API Gateway:
+
+- **Railway (nuvem real):** o **banco Postgres** gerenciado e o serviço de **autenticação**
+  (`fiap-auth`, Bun — CPF→JWT), com URL pública e deploy automático a partir do GitHub.
+- **Kubernetes local:** a **API .NET** (Deployment + HPA escalável) atrás do **Kong** (gateway:
+  roteamento + rate-limiting). A app consome o banco no Railway e aceita o JWT emitido pela auth.
 
 ```mermaid
 flowchart TB
   Cliente([Cliente / Operador])
 
-  subgraph RW["Railway — projeto fiap-fase3 (nuvem real)"]
+  subgraph RW["Railway (nuvem gerenciada)"]
     AUTH["fiap-auth (Bun)
-POST /auth  •  URL pública"]
-    APP["fiap-app (.NET, container)
-API + Swagger  •  URL pública"]
+POST /auth • URL pública"]
     PG[("PostgreSQL 18
 gerenciado")]
-    APP -->|"Npgsql (rede privada
-postgres.railway.internal)"| PG
     AUTH -->|"pg (TCP proxy + SSL)"| PG
+  end
+
+  subgraph K8S["Kubernetes local"]
+    KONG["Kong API Gateway
+roteamento + rate-limiting"]
+    APP["fiap-app (.NET)
+Deployment + HPA (2..6)"]
+    KONG --> APP
   end
 
   Cliente -->|"1. POST /auth {cpf}"| AUTH
   AUTH -->|"JWT HS256"| Cliente
-  Cliente -->|"2. API + Bearer JWT"| APP
+  Cliente -->|"2. API + Bearer JWT"| KONG
+  APP -->|"Npgsql + SSL (TCP proxy)"| PG
 ```
 
-| Serviço | Tipo no Railway | URL pública |
+| Componente | Onde roda | Observação |
 |---|---|---|
-| **fiap-app** (.NET) | container (Dockerfile, autodeploy do repo) | `https://fiap-app-production.up.railway.app` |
-| **fiap-auth** (Node/Bun) | container `Bun.serve` (autodeploy do repo) | `https://fiap-auth-production.up.railway.app` |
-| **Postgres** | banco gerenciado | rede privada `postgres.railway.internal` + TCP proxy |
+| **Postgres** | Railway (gerenciado) | acesso via rede privada + TCP proxy público |
+| **fiap-auth** (Bun) | Railway (container) | `https://fiap-auth-production.up.railway.app` |
+| **fiap-app** (.NET) | Kubernetes local | atrás do **Kong**, HPA escalável (`fiap-infra-k8s`) |
+| **Gateway** | Kubernetes local | **Kong** (rate-limiting); NGINX disponível como alternativa |
 
-**Notas de implantação**
-- A **app .NET** conecta ao Postgres pela **rede privada** interna do Railway; a **auth (Bun)** usa
-  o **TCP proxy público com SSL** (o driver `pg` do Node não resolve a rede privada IPv6-only).
-- Cada serviço fixa `PORT` alinhado ao *target port* do domínio público do Railway.
-- O contrato do **JWT é o mesmo** em qualquer topologia (HS256, `iss/aud=Oficina.Api`, mesmo
-  segredo), então a auth de um ambiente é aceita pela API do mesmo ambiente.
-
-> **Três topologias, mesmo código e mesmo contrato:** nuvem AWS simulada (LocalStack) · Kubernetes
-> local escalável (HPA) · **nuvem real (Railway)**. A escolha é só de infraestrutura.
+**Notas**
+- O contrato do **JWT é o mesmo** em toda topologia (HS256, `iss/aud=Oficina.Api`, mesmo segredo):
+  a auth no Railway emite um token aceito pela API .NET no cluster.
+- O Kong encaminha o header `Authorization`; a **validação do JWT é feita pela aplicação**.
+- A API também pode rodar em nuvem AWS **simulada** (LocalStack) — mesma imagem/código.
 
 ## 2. Diagrama de sequência — Autenticação (CPF → JWT)
 

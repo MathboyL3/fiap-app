@@ -78,21 +78,21 @@ kubectl port-forward -n oficina svc/fiap-app 8080:80
 dotnet test Oficina.slnx -c Release      # 102 testes (domínio + aplicação + API)
 ```
 
-## Deploy em nuvem (Railway)
+## Implantação (Kubernetes + Kong, com Railway)
 
-Além do Kubernetes local, a API roda **em nuvem real** no **Railway** (mesmo projeto `fiap-fase3`
-do banco), como **container** construído a partir deste repositório (autodeploy a cada push na `main`).
+A API roda no **Kubernetes** (`fiap-infra-k8s`, Docker Desktop) atrás do **Kong** (API Gateway:
+roteamento + rate-limiting), como um Deployment **escalável por HPA**. Ela consome, na **nuvem
+gerenciada (Railway)**, o **Postgres** e o serviço de **autenticação** (`fiap-auth`, CPF→JWT).
 
-- **URL pública:** https://fiap-app-production.up.railway.app (Swagger na raiz).
-- **Banco:** conecta ao Postgres gerenciado pela **rede privada** do Railway
-  (`postgres.railway.internal:5432`), sem passar pela internet.
-- **Variáveis** (Railway → serviço `fiap-app`): `ConnectionStrings__Postgres` (com referência
-  `${{Postgres.PGPASSWORD}}`), `Jwt__Secret` (segredo HS256 canônico), `ASPNETCORE_ENVIRONMENT=Production`.
+- **Gateway:** Kong no cluster (NGINX disponível como alternativa). Acesso local:
+  `kubectl port-forward -n kong svc/kong-gateway-proxy 18000:80` → `http://localhost:18000`.
+- **Banco:** Postgres gerenciado no Railway (conexão Npgsql via TCP proxy com SSL).
+- **Auth:** `https://fiap-auth-production.up.railway.app` emite o JWT que a API valida.
 - **Health:** `/health/live` e `/health/ready` (este confirma a conexão com o Postgres).
 
-> **Arquitetura dual:** o **Railway** é o deploy de **nuvem** (produção); o **Kubernetes**
-> (`fiap-infra-k8s`, Docker Desktop) permanece como o **cluster escalável com HPA** exigido pelo
-> enunciado. As duas formas usam a mesma imagem/o mesmo banco.
+> **Divisão nuvem/local:** no **Railway** ficam o **banco** e a **autenticação** (gerenciados,
+> URL pública); no **Kubernetes local** fica a **API** atrás do **Kong**, escalável com HPA —
+> atendendo ao requisito de cluster escalável do enunciado. Ver [`docs/ARQUITETURA.md`](docs/ARQUITETURA.md).
 
 ## CI/CD (`.github/workflows/ci.yml`)
 - **PR/push:** restore, build, **test + coverage**, e **docker build** da imagem.
