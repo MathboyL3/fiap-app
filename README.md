@@ -100,5 +100,4 @@ Este repositório é a **aplicação**. A solução da Fase 3 é composta por 4 
 ## Documentação
 - [`docs/ARQUITETURA.md`](docs/ARQUITETURA.md) — arquitetura, diagrama de componentes e sequência.
 - [`docs/rfc/`](docs/rfc/) — RFCs (decisões de arquitetura do sistema).
-- [`docs/ENTREGA.md`](docs/ENTREGA.md) — guia de entrega (links dos 4 repos, requisitos atendidos, pendências manuais).
 - [`docs/adr/0001-observabilidade-newrelic.md`](docs/adr/0001-observabilidade-newrelic.md)

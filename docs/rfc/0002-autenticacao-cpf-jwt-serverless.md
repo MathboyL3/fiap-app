@@ -25,7 +25,7 @@ localiza o cliente e devolve um **JWT**. O enunciado pede que isso passe por **A
 
 ## Consequências
 - (+) Autenticação isolada, com deploy e escala próprios.
-- (+) Interoperabilidade validada ao vivo (JWT da Lambda aceito pela API .NET).
+- (+) Interoperabilidade: o JWT emitido pela Lambda é aceito pela API .NET (mesmo iss/aud/secret).
 - (−) O segredo HS256 precisa estar sincronizado entre Lambda e API (gerido por secret, não versionado).
 - (−) A Lambda depende do schema do banco (nomes de colunas do EF) — acoplamento tratado com query
   explícita e testes.

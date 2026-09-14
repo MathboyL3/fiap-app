@@ -139,7 +139,7 @@ O cliente final pode acompanhar o status **sem autenticação** por `GET /api/or
 
 ## 4. Escalabilidade e resiliência
 - **HPA v2** no `fiap-app`: 2 a 6 réplicas, gatilhos CPU 60% / memória 75% (`select_policy=Max`).
-  Escalonamento **comprovado ao vivo** (2→6 réplicas sob carga de memória).
+  Escalonamento elástico automático (2→6 réplicas conforme a carga de CPU/memória).
 - **Health checks**: `/health/live` (liveness) e `/health/ready` (readiness — verifica o Postgres),
   consumidos pelas probes do Kubernetes.
 - **Banco gerenciado** (Railway): backup e volume persistente pelo provedor; app resiliente a
