@@ -124,7 +124,7 @@
           }
         },
         {
-          "title": "Autenticacoes de cliente (Lambda) via logs",
+          "title": "Autenticacoes de cliente (auth) via logs",
           "visualization": { "id": "viz.line" },
           "layout": { "column": 7, "row": 4, "width": 6, "height": 3 },
           "rawConfiguration": {
