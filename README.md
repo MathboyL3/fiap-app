@@ -7,7 +7,7 @@ Cobre o ciclo completo da **Ordem de Serviço** (recepção → orçamento → e
 ## Tecnologias
 - **.NET 10 / ASP.NET Core** — Clean Architecture (Domain / Application / Infrastructure / Api)
 - **EF Core + Npgsql** → **PostgreSQL gerenciado** (Railway, `fiap-infra-db`)
-- **JWT Bearer** (HS256) — mesmo `issuer/audience/secret` da Lambda
+- **JWT Bearer** (HS256) — mesmo `issuer/audience/secret` do serviço de autenticação
 - **Serilog** — logs estruturados JSON com correlação (`trace.id`/`span.id`)
 - **New Relic** — APM (agent .NET) + logs + dashboards
 - **Docker** + **Kubernetes** (HPA), Swagger/OpenAPI, FluentValidation, xUnit
@@ -66,7 +66,7 @@ kubectl port-forward -n oficina svc/fiap-app 8080:80
 | Variável | Descrição |
 |---|---|
 | `ConnectionStrings__Postgres` | conexão Npgsql ao banco gerenciado (Railway) |
-| `Jwt__Secret` | segredo HS256 (**igual** ao da Lambda) |
+| `Jwt__Secret` | segredo HS256 (**igual** ao do serviço de autenticação) |
 | `NEW_RELIC_LICENSE_KEY` | license key do New Relic (via Secret) |
 
 ## API / Swagger
@@ -104,9 +104,9 @@ Este repositório é a **aplicação**. A solução da Fase 3 é composta por 4 
 
 | Repositório | Papel |
 |---|---|
-| **[fiap-auth-lambda](https://github.com/MathboyL3/fiap-auth-lambda)** | Autenticação por CPF → JWT (API Gateway + Lambda / LocalStack) |
+| **[fiap-auth-lambda](https://github.com/MathboyL3/fiap-auth-lambda)** | Autenticação por CPF → JWT (serverless Bun, Railway) |
 | **[fiap-app](https://github.com/MathboyL3/fiap-app)** (este) | API principal da oficina (.NET / Kubernetes) |
-| **[fiap-infra-k8s](https://github.com/MathboyL3/fiap-infra-k8s)** | Infra do cluster (Terraform: deployment, HPA, Ingress, secrets) |
+| **[fiap-infra-k8s](https://github.com/MathboyL3/fiap-infra-k8s)** | Infra do cluster + gateway Kong (Terraform: deployment, HPA, Kong/Konga, secrets) |
 | **[fiap-infra-db](https://github.com/MathboyL3/fiap-infra-db)** | Banco de dados gerenciado (Terraform + PostgreSQL no Railway) |
 
 > **Visão de arquitetura, diagrama de componentes (cloud) e diagramas de sequência
