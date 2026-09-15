@@ -6,7 +6,7 @@ mas juntos formam um único sistema.
 
 | Repositório | Papel | Stack | Deploy |
 |---|---|---|---|
-| **[fiap-auth-lambda](https://github.com/MathboyL3/fiap-auth-lambda)** | Autenticação por CPF → emite JWT | TypeScript / Bun (serverless) | Railway (container, URL pública) |
+| **[fiap-auth-lambda](https://github.com/MathboyL3/fiap-auth-lambda)** | Autenticação por CPF → emite JWT | TypeScript / Bun (Railway Function) | Railway Functions (serverless, URL pública) |
 | **[fiap-app](https://github.com/MathboyL3/fiap-app)** | API principal da oficina (Ordens de Serviço, clientes, estoque) | .NET 10 / ASP.NET Core (Clean Architecture) | Kubernetes (Docker Desktop / HPA) atrás do Kong |
 | **[fiap-infra-k8s](https://github.com/MathboyL3/fiap-infra-k8s)** | Infra do cluster + gateway Kong (namespace, deployment, HPA, Kong/Konga, secrets) | Terraform (providers `kubernetes`, `helm`) | Cluster K8s local escalável |
 | **[fiap-infra-db](https://github.com/MathboyL3/fiap-infra-db)** | Banco de dados **gerenciado** | Terraform (provider `railway`) | PostgreSQL gerenciado no Railway |
@@ -25,7 +25,7 @@ flowchart TB
   Cliente([Cliente / Operador da oficina])
 
   subgraph RW["Nuvem gerenciada — Railway"]
-    AUTH["fiap-auth (Bun)
+    AUTH["fiap-auth (Railway Function)
 POST /auth • URL pública
 valida CPF → gera JWT"]
     PG[("PostgreSQL
@@ -74,7 +74,7 @@ segredo — é o que torna a autenticação emitida pelo fiap-auth válida na AP
 | Componente | Onde roda | Observação |
 |---|---|---|
 | **Postgres** | Railway (gerenciado) | acesso via rede privada + TCP proxy público |
-| **fiap-auth** (Bun) | Railway (container) | `https://fiap-auth-production.up.railway.app` |
+| **fiap-auth** (Bun) | Railway Function (serverless) | `https://function-bun-production-8bb2.up.railway.app` |
 | **fiap-app** (.NET) | Kubernetes | atrás do **Kong**, HPA escalável (`fiap-infra-k8s`) |
 | **Gateway** | Kubernetes | **Kong** (roteamento + rate-limiting), com **Konga** como GUI |
 
@@ -89,7 +89,7 @@ segredo — é o que torna a autenticação emitida pelo fiap-auth válida na AP
 sequenceDiagram
   autonumber
   actor C as Cliente
-  participant A as fiap-auth (Bun · Railway)
+  participant A as fiap-auth (Railway Function)
   participant DB as PostgreSQL (Railway)
 
   C->>A: POST /auth { "cpf": "529.982.247-25" }
@@ -165,7 +165,7 @@ O cliente final pode acompanhar o status **sem autenticação** por `GET /api/or
 - **RFCs** (decisões de arquitetura do sistema): [`docs/rfc/`](rfc/)
 - **ADRs** por repositório:
   - fiap-app — [`docs/adr/0001-observabilidade-newrelic.md`](adr/0001-observabilidade-newrelic.md)
-  - fiap-auth-lambda — `docs/adr/0001-*` (estratégia CPF→JWT), `docs/adr/0003-*` (Bun no Railway)
+  - fiap-auth-lambda — `docs/adr/0001-*` (estratégia CPF→JWT), `docs/adr/0003-*` (Railway Function)
   - fiap-infra-k8s — `docs/adr/0001-hpa-escalabilidade.md`, `docs/adr/0002-gateway-ingress-e-comunicacao.md`, `docs/adr/0003-gateway-kong.md`
   - fiap-infra-db — `docs/adr/0001-*`, `docs/adr/0002-*` + `docs/MODELO-DADOS.md` (ER + justificativa do banco)
 - **Observabilidade**: [`observability/README.md`](../observability/README.md) (dashboard as-code + alertas)

@@ -87,7 +87,7 @@ gerenciada (Railway)**, o **Postgres** e o serviço de **autenticação** (`fiap
 - **Gateway:** Kong no cluster (NGINX disponível como alternativa). Acesso local:
   `kubectl port-forward -n kong svc/kong-gateway-proxy 18000:80` → `http://localhost:18000`.
 - **Banco:** Postgres gerenciado no Railway (conexão Npgsql via TCP proxy com SSL).
-- **Auth:** `https://fiap-auth-production.up.railway.app` emite o JWT que a API valida.
+- **Auth:** `https://function-bun-production-8bb2.up.railway.app` (Railway Function serverless) emite o JWT que a API valida.
 - **Health:** `/health/live` e `/health/ready` (este confirma a conexão com o Postgres).
 
 > **Divisão nuvem/local:** no **Railway** ficam o **banco** e a **autenticação** (gerenciados,
@@ -104,7 +104,7 @@ Este repositório é a **aplicação**. A solução da Fase 3 é composta por 4 
 
 | Repositório | Papel |
 |---|---|
-| **[fiap-auth-lambda](https://github.com/MathboyL3/fiap-auth-lambda)** | Autenticação por CPF → JWT (serverless Bun, Railway) |
+| **[fiap-auth-lambda](https://github.com/MathboyL3/fiap-auth-lambda)** | Autenticação por CPF → JWT (Railway Function serverless, Bun) |
 | **[fiap-app](https://github.com/MathboyL3/fiap-app)** (este) | API principal da oficina (.NET / Kubernetes) |
 | **[fiap-infra-k8s](https://github.com/MathboyL3/fiap-infra-k8s)** | Infra do cluster + gateway Kong (Terraform: deployment, HPA, Kong/Konga, secrets) |
 | **[fiap-infra-db](https://github.com/MathboyL3/fiap-infra-db)** | Banco de dados gerenciado (Terraform + PostgreSQL no Railway) |
