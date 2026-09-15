@@ -14,7 +14,7 @@ infraestrutura reprodutível.
   - **PostgreSQL gerenciado** (banco da aplicação), provisionado/importado via Terraform
     (provider comunitário `railway`) — banco **gerenciado de verdade** (backup, volume persistente,
     operação pelo provedor).
-  - **fiap-auth** (serviço serverless de autenticação, container **Bun**) com **URL pública**,
+  - **fiap-auth** (Function Serverless de autenticação no **Railway Functions**, runtime **Bun**) com **URL pública**,
     consumindo o mesmo Postgres.
 - **Cluster Kubernetes escalável** (Docker Desktop) provisionado por Terraform (providers
   `kubernetes` e `helm`), com **HPA** e o **Kong** como API Gateway (roteamento + rate-limiting)

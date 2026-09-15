@@ -9,7 +9,7 @@ localiza o cliente e devolve um **JWT**. O enunciado pede que isso seja feito po
 serverless desacoplado** da API principal.
 
 ## Decisão
-- **Serviço serverless em TypeScript** executado no runtime **Bun** (`Bun.serve`), exposto por HTTP
+- **Function Serverless em TypeScript** executada no **Railway Functions** (runtime **Bun**, `Bun.serve`), exposta por HTTP
   (`POST /auth`) e hospedado em **nuvem real (Railway)** com URL pública.
 - O serviço: valida os dígitos verificadores do CPF → consulta o cliente no Postgres → assina um
   **JWT HS256**.
@@ -23,7 +23,7 @@ serverless desacoplado** da API principal.
 - **Autenticação embutida na API .NET** — rejeitada: o enunciado pede o fluxo por um serviço
   serverless desacoplado, o que permite trocar/escalar a autenticação sem tocar na API.
 - **AWS Lambda + API Gateway** — considerada por ser o "serverless" clássico; preterida em favor de
-  um **container Bun no Railway** (nuvem real, URL pública, deploy contínuo, sem custo relevante),
+  uma **Railway Function** (serverless nativo, runtime Bun, URL pública, sem custo relevante),
   mantendo o mesmo contrato de JWT.
 - **Runtime em .NET/Python** — TypeScript/Bun foi escolhido pela subida rápida, ecossistema de
   JWT/pg maduro e simplicidade de empacotamento.
