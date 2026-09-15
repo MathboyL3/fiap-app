@@ -6,10 +6,10 @@ mas juntos formam um único sistema.
 
 | Repositório | Papel | Stack | Deploy |
 |---|---|---|---|
-| **[fiap-auth-lambda](https://github.com/MathboyL3/fiap-auth-lambda)** | Autenticação por CPF → emite JWT | Node.js/TypeScript, API Gateway + Lambda | LocalStack (nuvem AWS simulada, portável p/ AWS real) |
-| **[fiap-app](https://github.com/MathboyL3/fiap-app)** | API principal da oficina (Ordens de Serviço, clientes, estoque) | .NET 10 / ASP.NET Core (Clean Architecture) | Kubernetes (Docker Desktop / HPA) |
-| **[fiap-infra-k8s](https://github.com/MathboyL3/fiap-infra-k8s)** | Infra do cluster (namespace, deployment, HPA, Ingress, secrets) | Terraform (provider `kubernetes`) | Cluster K8s local escalável |
-| **[fiap-infra-db](https://github.com/MathboyL3/fiap-infra-db)** | Banco de dados **gerenciado** | Terraform (provider `railway`) | PostgreSQL 18 gerenciado no Railway |
+| **[fiap-auth-lambda](https://github.com/MathboyL3/fiap-auth-lambda)** | Autenticação por CPF → emite JWT | TypeScript / Bun (serverless) | Railway (container, URL pública) |
+| **[fiap-app](https://github.com/MathboyL3/fiap-app)** | API principal da oficina (Ordens de Serviço, clientes, estoque) | .NET 10 / ASP.NET Core (Clean Architecture) | Kubernetes (Docker Desktop / HPA) atrás do Kong |
+| **[fiap-infra-k8s](https://github.com/MathboyL3/fiap-infra-k8s)** | Infra do cluster + gateway Kong (namespace, deployment, HPA, Kong/Konga, secrets) | Terraform (providers `kubernetes`, `helm`) | Cluster K8s local escalável |
+| **[fiap-infra-db](https://github.com/MathboyL3/fiap-infra-db)** | Banco de dados **gerenciado** | Terraform (provider `railway`) | PostgreSQL gerenciado no Railway |
 
 Observabilidade transversal: **New Relic** (APM da API + infra Kubernetes + logs JSON correlacionados + dashboards + alertas).
 
@@ -17,106 +17,71 @@ Observabilidade transversal: **New Relic** (APM da API + infra Kubernetes + logs
 
 ## 1. Diagrama de componentes (visão "cloud")
 
+O sistema combina **nuvem gerenciada (Railway)** — que hospeda o **banco** e a **autenticação** — com
+um **cluster Kubernetes** que roda a **API .NET** atrás do **Kong** (API Gateway).
+
 ```mermaid
 flowchart TB
   Cliente([Cliente / Operador da oficina])
 
-  subgraph AWS["Nuvem AWS simulada — LocalStack (fiap-auth-lambda)"]
-    APIGW["API Gateway REST\nPOST /auth"]
-    LAMBDA["Lambda auth (Node.js)\nvalida CPF → gera JWT"]
-    SM["Secrets Manager\nJWT_SECRET • DATABASE_URL"]
-    APIGW --> LAMBDA
-    LAMBDA --> SM
+  subgraph RW["Nuvem gerenciada — Railway"]
+    AUTH["fiap-auth (Bun)
+POST /auth • URL pública
+valida CPF → gera JWT"]
+    PG[("PostgreSQL
+gerenciado (Railway)")]
+    AUTH -->|"pg (TCP proxy + SSL)"| PG
   end
 
   subgraph K8S["Kubernetes escalável — fiap-infra-k8s"]
-    ING["Ingress NGINX\n(rate limit 20 rps)"]
+    KONG["Kong API Gateway
+roteamento + rate-limiting"]
     subgraph DEP["Deployment fiap-app (2..6 réplicas)"]
-      APP1["fiap-app (.NET)\nOficina.Api"]
+      APP["fiap-app (.NET)
+Oficina.Api"]
     end
-    HPA["HPA v2\nCPU 60% / Mem 75%"]
-    SEC["Secret oficina-secrets\nJwt__Secret • Postgres__Password • NewRelic__LicenseKey"]
-    ING --> DEP
+    HPA["HPA v2
+CPU 60% / Mem 75%"]
+    SEC["Secret oficina-secrets
+Jwt__Secret • Postgres__Password • NewRelic__LicenseKey"]
+    KONG --> DEP
     HPA -. escala .-> DEP
     SEC -. env .-> DEP
   end
 
-  subgraph RAILWAY["Nuvem gerenciada — fiap-infra-db"]
-    PG[("PostgreSQL 18\ngerenciado (Railway)\nvia TCP proxy")]
-  end
+  NR[("New Relic
+APM • Infra K8s • Logs • Dashboards • Alertas")]
 
-  NR[("New Relic\nAPM • Infra K8s • Logs • Dashboards • Alertas")]
-
-  Cliente -->|"1. POST /auth {cpf}"| APIGW
-  LAMBDA -->|"consulta cliente por CPF"| PG
-  APIGW -->|"JWT (HS256)"| Cliente
-  Cliente -->|"2. chamadas API + Bearer JWT"| ING
-  APP1 -->|"Npgsql (SSL)"| PG
+  Cliente -->|"1. POST /auth {cpf}"| AUTH
+  AUTH -->|"JWT (HS256)"| Cliente
+  Cliente -->|"2. chamadas API + Bearer JWT"| KONG
+  APP -->|"Npgsql (SSL)"| PG
   DEP -.->|"APM + logs"| NR
   K8S -.->|"nri-bundle (infra/pods)"| NR
 ```
 
 **Fluxo macro**
-1. O cliente autentica no **API Gateway** (LocalStack) enviando o **CPF**; a **Lambda** consulta o
+1. O cliente autentica no serviço **fiap-auth** (Railway) enviando o **CPF**; o serviço consulta o
    cliente no **Postgres gerenciado** e devolve um **JWT HS256**.
-2. Com o JWT, o cliente chama a **API .NET** no **Kubernetes** (via **Ingress**); a API valida o
-   token (mesmo `issuer/audience/secret` da Lambda) e persiste no **mesmo Postgres**.
+2. Com o JWT, o cliente chama a **API .NET** no **Kubernetes** através do **Kong**; a API valida o
+   token (mesmo `issuer/audience/secret` da auth) e persiste no **mesmo Postgres**.
 3. **New Relic** observa tudo: APM da API, infraestrutura do cluster (CPU/mem/pods) e logs JSON
    correlacionados por `trace.id`/`span.id`.
 
-O contrato do JWT é **compartilhado** entre Lambda e API: `iss=aud=Oficina.Api`, HS256, mesmo
-segredo — é o que torna a autenticação emitida na Lambda válida na API .NET.
-
----
-
-## 1b. Topologia de implantação (Railway + Kubernetes + Kong)
-
-O sistema combina **nuvem gerenciada (Railway)** com um **cluster Kubernetes local** que tem o
-**Kong** como API Gateway:
-
-- **Railway (nuvem real):** o **banco Postgres** gerenciado e o serviço de **autenticação**
-  (`fiap-auth`, Bun — CPF→JWT), com URL pública e deploy automático a partir do GitHub.
-- **Kubernetes local:** a **API .NET** (Deployment + HPA escalável) atrás do **Kong** (gateway:
-  roteamento + rate-limiting). A app consome o banco no Railway e aceita o JWT emitido pela auth.
-
-```mermaid
-flowchart TB
-  Cliente([Cliente / Operador])
-
-  subgraph RW["Railway (nuvem gerenciada)"]
-    AUTH["fiap-auth (Bun)
-POST /auth • URL pública"]
-    PG[("PostgreSQL 18
-gerenciado")]
-    AUTH -->|"pg (TCP proxy + SSL)"| PG
-  end
-
-  subgraph K8S["Kubernetes local"]
-    KONG["Kong API Gateway
-roteamento + rate-limiting"]
-    APP["fiap-app (.NET)
-Deployment + HPA (2..6)"]
-    KONG --> APP
-  end
-
-  Cliente -->|"1. POST /auth {cpf}"| AUTH
-  AUTH -->|"JWT HS256"| Cliente
-  Cliente -->|"2. API + Bearer JWT"| KONG
-  APP -->|"Npgsql + SSL (TCP proxy)"| PG
-```
+O contrato do JWT é **compartilhado** entre a auth e a API: `iss=aud=Oficina.Api`, HS256, mesmo
+segredo — é o que torna a autenticação emitida pelo fiap-auth válida na API .NET.
 
 | Componente | Onde roda | Observação |
 |---|---|---|
 | **Postgres** | Railway (gerenciado) | acesso via rede privada + TCP proxy público |
 | **fiap-auth** (Bun) | Railway (container) | `https://fiap-auth-production.up.railway.app` |
-| **fiap-app** (.NET) | Kubernetes local | atrás do **Kong**, HPA escalável (`fiap-infra-k8s`) |
-| **Gateway** | Kubernetes local | **Kong** (rate-limiting); NGINX disponível como alternativa |
+| **fiap-app** (.NET) | Kubernetes | atrás do **Kong**, HPA escalável (`fiap-infra-k8s`) |
+| **Gateway** | Kubernetes | **Kong** (roteamento + rate-limiting), com **Konga** como GUI |
 
-**Notas**
-- O contrato do **JWT é o mesmo** em toda topologia (HS256, `iss/aud=Oficina.Api`, mesmo segredo):
-  a auth no Railway emite um token aceito pela API .NET no cluster.
-- O Kong encaminha o header `Authorization`; a **validação do JWT é feita pela aplicação**.
-- A API também pode rodar em nuvem AWS **simulada** (LocalStack) — mesma imagem/código.
+> O Kong encaminha o header `Authorization`; a **validação do JWT é feita pela aplicação**.
+> O NGINX Ingress permanece disponível no cluster como alternativa de entrada.
+
+---
 
 ## 2. Diagrama de sequência — Autenticação (CPF → JWT)
 
@@ -124,27 +89,22 @@ Deployment + HPA (2..6)"]
 sequenceDiagram
   autonumber
   actor C as Cliente
-  participant GW as API Gateway (LocalStack)
-  participant L as Lambda auth (Node)
-  participant SM as Secrets Manager
+  participant A as fiap-auth (Bun · Railway)
   participant DB as PostgreSQL (Railway)
 
-  C->>GW: POST /auth { "cpf": "529.982.247-25" }
-  GW->>L: invoca handler
-  L->>L: valida/normaliza CPF (dígitos verificadores)
+  C->>A: POST /auth { "cpf": "529.982.247-25" }
+  A->>A: valida/normaliza CPF (dígitos verificadores)
   alt CPF inválido
-    L-->>C: 400 Bad Request
+    A-->>C: 400 Bad Request
   else CPF válido
-    L->>SM: getSecretValue(JWT_SECRET, DATABASE_URL)
-    SM-->>L: segredos
-    L->>DB: SELECT "Id","Nome","Email" FROM clientes WHERE documento = $1
+    A->>DB: SELECT "Id","Nome","Email" FROM clientes WHERE documento = $1
     alt cliente não encontrado
-      DB-->>L: 0 linhas
-      L-->>C: 404 Not Found
+      DB-->>A: 0 linhas
+      A-->>C: 404 Not Found
     else cliente encontrado
-      DB-->>L: { Id, Nome, Email }
-      L->>L: assina JWT HS256 (sub, email, role=Cliente, cpf, name, jti)
-      L-->>C: 200 { "token": "<JWT>" }
+      DB-->>A: { Id, Nome, Email }
+      A->>A: assina JWT HS256 (sub, email, role=Cliente, cpf, name, jti)
+      A-->>C: 200 { "access_token": "<JWT>" }
     end
   end
 ```
@@ -155,14 +115,14 @@ sequenceDiagram
 sequenceDiagram
   autonumber
   actor U as Operador (JWT)
-  participant ING as Ingress NGINX
+  participant K as Kong (API Gateway)
   participant API as fiap-app (.NET)
   participant DB as PostgreSQL (Railway)
   participant NR as New Relic
 
   Note over U,API: Todas as chamadas levam Authorization: Bearer <JWT>
-  U->>ING: POST /api/ordens-servico { veiculoId, clienteId }
-  ING->>API: encaminha (Authorization forwarded)
+  U->>K: POST /api/ordens-servico { veiculoId, clienteId }
+  K->>API: encaminha (Authorization forwarded)
   API->>API: valida JWT (HS256, iss/aud=Oficina.Api)
   API->>DB: INSERT ordens_servico (status = Recebida)
   DB-->>API: OS criada (id)
@@ -195,16 +155,17 @@ O cliente final pode acompanhar o status **sem autenticação** por `GET /api/or
   restart de pods (estado no banco, não no pod).
 
 ## 5. Segurança
-- **JWT HS256** com segredo compartilhado via Secret (K8s) / Secrets Manager (Lambda) — nunca versionado.
+- **JWT HS256** com segredo compartilhado via Secret (K8s) / variável de ambiente (fiap-auth) — nunca versionado.
 - Rotas sensíveis exigem `Bearer`; autorização por **role** (`Cliente`, `Gerente`).
 - Segredos (Railway token, JWT secret, New Relic keys, senha do Postgres) ficam **fora do Git**
-  (GitHub Actions Secrets / K8s Secrets / Secrets Manager).
+  (GitHub Actions Secrets / K8s Secrets / variáveis do Railway).
+- **Kong** aplica **rate-limiting** na borda (proteção contra abuso) antes de encaminhar à API.
 
 ## 6. Documentos relacionados
 - **RFCs** (decisões de arquitetura do sistema): [`docs/rfc/`](rfc/)
 - **ADRs** por repositório:
   - fiap-app — [`docs/adr/0001-observabilidade-newrelic.md`](adr/0001-observabilidade-newrelic.md)
-  - fiap-auth-lambda — `docs/adr/0001-*`, `docs/adr/0002-*`
-  - fiap-infra-k8s — `docs/adr/0001-hpa-escalabilidade.md`, `docs/adr/0002-gateway-ingress-e-comunicacao.md`
+  - fiap-auth-lambda — `docs/adr/0001-*` (estratégia CPF→JWT), `docs/adr/0003-*` (Bun no Railway)
+  - fiap-infra-k8s — `docs/adr/0001-hpa-escalabilidade.md`, `docs/adr/0002-gateway-ingress-e-comunicacao.md`, `docs/adr/0003-gateway-kong.md`
   - fiap-infra-db — `docs/adr/0001-*`, `docs/adr/0002-*` + `docs/MODELO-DADOS.md` (ER + justificativa do banco)
 - **Observabilidade**: [`observability/README.md`](../observability/README.md) (dashboard as-code + alertas)

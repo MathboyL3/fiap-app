@@ -4,16 +4,16 @@
 - **Data:** Fase 3
 
 ## Contexto
-O enunciado exige que a solução seja entregue em **4 repositórios independentes** — Lambda de
+O enunciado exige que a solução seja entregue em **4 repositórios independentes** — serviço serverless de
 autenticação, infraestrutura do Kubernetes, infraestrutura do banco e a aplicação — cada um com
 **CI/CD de deploy automatizado**, `main` **protegida** e alterações somente via **Pull Request**.
 
 ## Decisão
 Criar 4 repositórios públicos no GitHub (owner `MathboyL3`):
 
-- `fiap-auth-lambda` — função de autenticação CPF→JWT (Node/TS + Terraform p/ API Gateway/Lambda).
+- `fiap-auth-lambda` — serviço serverless de autenticação CPF→JWT (TypeScript/Bun, Railway).
 - `fiap-app` — API .NET (Clean Architecture) da oficina.
-- `fiap-infra-k8s` — Terraform do cluster Kubernetes (deployment, HPA, Ingress, secrets).
+- `fiap-infra-k8s` — Terraform do cluster Kubernetes + gateway Kong (deployment, HPA, Kong/Konga, secrets).
 - `fiap-infra-db` — Terraform do banco gerenciado.
 
 Cada repositório tem:
